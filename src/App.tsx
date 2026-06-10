@@ -6,6 +6,7 @@ import { LayoutDashboard, ListChecks, Loader2, LogOut, Settings } from 'lucide-r
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Tasks from './pages/Tasks';
 import FixedTasks from './pages/FixedTasks';
@@ -158,6 +159,7 @@ function AppRoutes() {
       <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/register" element={session ? <Navigate to="/" replace /> : <Register />} />
       <Route path="/forgot-password" element={session ? <Navigate to="/" replace /> : <ForgotPassword />} />
+      <Route path="/reset-password" element={session ? <ResetPassword /> : <Navigate to="/login" replace />} />
       
       <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
       <Route path="/tasks" element={<ProtectedRoute><Layout><Tasks /></Layout></ProtectedRoute>} />
