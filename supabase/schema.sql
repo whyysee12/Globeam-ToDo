@@ -73,13 +73,23 @@ CREATE TABLE daily_tasks (
   fixed_task_id UUID REFERENCES fixed_tasks(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
+  remark TEXT,
   priority task_priority DEFAULT 'medium'::task_priority NOT NULL,
   status task_status DEFAULT 'pending'::task_status NOT NULL,
-  due_time TIME,
+  due_date DATE,
+  task_type VARCHAR(20) DEFAULT 'today' CHECK (task_type IN ('today', 'fixed', 'regular')),
   is_custom BOOLEAN DEFAULT false NOT NULL,
   date DATE DEFAULT CURRENT_DATE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Create indexes for performance
+CREATE INDEX idx_daily_tasks_user_id ON daily_tasks(user_id);
+CREATE INDEX idx_daily_tasks_date ON daily_tasks(date);
+CREATE INDEX idx_daily_tasks_due_date ON daily_tasks(due_date);
+CREATE INDEX idx_daily_tasks_status ON daily_tasks(status);
+CREATE INDEX idx_daily_tasks_priority ON daily_tasks(priority);
+CREATE INDEX idx_daily_tasks_task_type ON daily_tasks(task_type);
 
 ALTER TABLE daily_tasks ENABLE ROW LEVEL SECURITY;
 -- Users can manage their own daily tasks

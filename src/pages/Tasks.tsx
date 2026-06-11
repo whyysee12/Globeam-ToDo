@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { CheckCircle2, Circle, Loader2, Plus, RefreshCcw, Trash2 } from 'lucide-react';
+import { CheckCircle2, Circle, Edit2, Loader2, Plus, RefreshCcw, Trash2, X } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../context/auth';
-import { createTask, deleteTask, fetchTodayTasks, updateTaskStatus } from '../lib/tasks';
-import type { DailyTask, TaskPriority, TaskStatus } from '../lib/tasks';
+import { createTask, deleteTask, fetchTodayTasks, updateTask, updateTaskStatus, type DailyTask, type TaskPriority, type TaskStatus, type TaskType } from '../lib/tasks';
 
 const statusOptions: { label: string; value: TaskStatus }[] = [
   { label: 'Pending', value: 'pending' },
@@ -18,6 +17,12 @@ const priorityOptions: { label: string; value: TaskPriority }[] = [
   { label: 'High', value: 'high' },
   { label: 'Medium', value: 'medium' },
   { label: 'Low', value: 'low' },
+];
+
+const taskTypeOptions: { label: string; value: TaskType }[] = [
+  { label: "Today's Task", value: 'today' },
+  { label: 'Regular Task', value: 'regular' },
+  { label: 'Fixed Task', value: 'fixed' },
 ];
 
 const statusIcons = {
@@ -42,11 +47,13 @@ function TaskCard({
   task,
   onStatusChange,
   onDelete,
+  onEdit,
   busy,
 }: {
   task: DailyTask;
   onStatusChange: (task: DailyTask, status: TaskStatus) => void;
   onDelete: (task: DailyTask) => void;
+  onEdit: (task: DailyTask) => void;
   busy: boolean;
 }) {
   const StatusIcon = statusIcons[task.status];
@@ -63,14 +70,20 @@ function TaskCard({
             </span>
           </div>
           {task.description && <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{task.description}</p>}
+          {task.remark && <p className="mt-1 text-sm italic text-gray-600 dark:text-gray-300">💡 {task.remark}</p>}
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <span>{task.is_custom ? 'Custom task' : 'Fixed task'}</span>
-            {task.due_time && <span>Due {task.due_time.slice(0, 5)}</span>}
+            <span className="inline-block rounded bg-gray-100 px-2 py-1 dark:bg-gray-800">{task.task_type}</span>
+            {task.due_date && <span>Due {task.due_date}</span>}
           </div>
         </div>
-        <Button aria-label={`Delete ${task.title}`} variant="ghost" size="sm" disabled={busy} onClick={() => onDelete(task)}>
-          <Trash2 className="h-4 w-4 text-red-500" />
-        </Button>
+        <div className="flex gap-1 shrink-0">
+          <Button aria-label={`Edit ${task.title}`} variant="ghost" size="sm" disabled={busy} onClick={() => onEdit(task)}>
+            <Edit2 className="h-4 w-4 text-blue-500" />
+          </Button>
+          <Button aria-label={`Delete ${task.title}`} variant="ghost" size="sm" disabled={busy} onClick={() => onDelete(task)}>
+            <Trash2 className="h-4 w-4 text-red-500" />
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -100,8 +113,11 @@ export default function Tasks() {
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [remark, setRemark] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
-  const [dueTime, setDueTime] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [taskType, setTaskType] = useState<TaskType>('today');
+  const [editingTask, setEditingTask] = useState<DailyTask | null>(null);
 
   const groupedTasks = useMemo(() => {
     return statusOptions.map((status) => ({
@@ -153,19 +169,67 @@ export default function Tasks() {
       const created = await createTask(user.id, {
         title,
         description,
+        remark,
         priority,
-        due_time: dueTime,
+        due_date: dueDate,
+        task_type: taskType,
       });
       setTasks((current) => [...current, created]);
-      setTitle('');
-      setDescription('');
-      setPriority('medium');
-      setDueTime('');
+      resetForm();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleUpdate = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!user || !title.trim() || !editingTask) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateTask(editingTask.id, {
+        title,
+        description,
+        remark,
+        priority,
+        due_date: dueDate,
+        task_type: taskType,
+      });
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      resetForm();
+      setEditingTask(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+    setRemark('');
+    setPriority('medium');
+    setDueDate('');
+    setTaskType('today');
+  };
+
+  const handleEditClick = (task: DailyTask) => {
+    setEditingTask(task);
+    setTitle(task.title);
+    setDescription(task.description || '');
+    setRemark(task.remark || '');
+    setPriority(task.priority);
+    setDueDate(task.due_date || '');
+    setTaskType(task.task_type);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTask(null);
+    resetForm();
   };
 
   const handleStatusChange = async (task: DailyTask, status: TaskStatus) => {
@@ -211,28 +275,54 @@ export default function Tasks() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Add a task</CardTitle>
-          <CardDescription>Custom tasks are added to your list for today.</CardDescription>
+          <CardTitle>{editingTask ? 'Edit task' : 'Add a task'}</CardTitle>
+          <CardDescription>{editingTask ? 'Update your task details' : 'Custom tasks are added to your list for today.'}</CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4 lg:grid-cols-[1fr_1fr_160px_140px_auto]" onSubmit={handleCreate}>
-            <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Follow up with client" required />
-            <Input label="Description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Optional details" />
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Priority</label>
-              <select
-                className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                value={priority}
-                onChange={(event) => setPriority(event.target.value as TaskPriority)}
-              >
-                {priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+          <form className="grid gap-4" onSubmit={editingTask ? handleUpdate : handleCreate}>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Follow up with client" required />
+              <Input label="Description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Optional details" />
+              <Input label="Remark (Type of work)" value={remark} onChange={(event) => setRemark(event.target.value)} placeholder="e.g., Documentation, Meeting, Development" />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Task Type</label>
+                <select
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                  value={taskType}
+                  onChange={(event) => setTaskType(event.target.value as TaskType)}
+                >
+                  {taskTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Priority</label>
+                <select
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                  value={priority}
+                  onChange={(event) => setPriority(event.target.value as TaskPriority)}
+                >
+                  {priorityOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
+              <Input label="Due Date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
             </div>
-            <Input label="Due time" type="time" value={dueTime} onChange={(event) => setDueTime(event.target.value)} />
-            <div className="flex items-end">
-              <Button type="submit" className="w-full gap-2" isLoading={saving}>
-                <Plus className="h-4 w-4" /> Add
+            <div className="flex gap-2">
+              <Button type="submit" className="gap-2" isLoading={saving}>
+                {editingTask ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" /> Update
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" /> Add
+                  </>
+                )}
               </Button>
+              {editingTask && (
+                <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                  <X className="h-4 w-4" /> Cancel
+                </Button>
+              )}
             </div>
           </form>
         </CardContent>
@@ -256,6 +346,7 @@ export default function Tasks() {
                     busy={busyId === task.id}
                     onStatusChange={handleStatusChange}
                     onDelete={handleDelete}
+                    onEdit={handleEditClick}
                   />
                 ))
               ) : (
