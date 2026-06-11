@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
 import { useAuth } from '../context/auth';
-import { fetchTasksByDateRange, fetchTodayTasks, exportTasksToCSV, type DailyTask } from '../lib/tasks';
-import { format, subDays, startOfDay } from 'date-fns';
+import { fetchTodayTasks, exportTasksToCSV, type DailyTask } from '../lib/tasks';
+import { format, subDays } from 'date-fns';
 
 const statusLabels = {
   pending: 'Pending',
