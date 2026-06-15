@@ -459,9 +459,11 @@ export default function Dashboard() {
             {loading ? (
               <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-brand-500" /></div>
             ) : filteredAndSortedTasks.length ? (
-              filteredAndSortedTasks.slice(0, 5).map((task) => (
-                <TaskRow key={task.id} task={task} onStatusChange={handleStatusChange} onEdit={handleEditClick} busy={busyId === task.id} />
-              ))
+              <div className="space-y-4 max-h-[70vh] overflow-auto pr-2">
+                {filteredAndSortedTasks.map((task) => (
+                  <TaskRow key={task.id} task={task} onStatusChange={handleStatusChange} onEdit={handleEditClick} busy={busyId === task.id} />
+                ))}
+              </div>
             ) : (
               <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
                 No tasks found.
