@@ -16,6 +16,7 @@ export interface DailyTask {
   status: TaskStatus;
   due_date: string | null;
   task_type: TaskType;
+  related_to: string | null;
   is_custom: boolean;
   date: string;
   created_at: string;
@@ -38,6 +39,7 @@ export interface NewTaskInput {
   priority: TaskPriority;
   due_date?: string;
   task_type?: TaskType;
+  related_to?: string;
   date?: string;
 }
 
@@ -161,22 +163,43 @@ export async function fetchTodayTasks(userId: string) {
   return ensureDailyFixedTasks(userId);
 }
 
+function stripRelatedTo(payload: Record<string, unknown>) {
+  const sanitized = { ...payload };
+  delete sanitized.related_to;
+  return sanitized;
+}
+
+function shouldRetryWithoutRelatedTo(error: unknown) {
+  return (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as { message?: string }).message === 'string' &&
+    /(related_to).*schema cache/i.test((error as { message: string }).message)
+  );
+}
+
 export async function createTask(userId: string, task: NewTaskInput) {
-  const { data, error } = await supabase
-    .from('daily_tasks')
-    .insert({
-      user_id: userId,
-      title: task.title.trim(),
-      description: task.description?.trim() || null,
-      remark: task.remark?.trim() || null,
-      priority: task.priority,
-      due_date: task.due_date || null,
-      task_type: task.task_type || 'today',
-      date: task.date ?? todayKey(),
-      is_custom: true,
-    })
-    .select('*')
-    .single();
+  const payload: Record<string, unknown> = {
+    user_id: userId,
+    title: task.title.trim(),
+    description: task.description?.trim() || null,
+    remark: task.remark?.trim() || null,
+    priority: task.priority,
+    due_date: task.due_date || null,
+    task_type: task.task_type || 'today',
+    related_to: task.related_to?.trim() || null,
+    date: task.date ?? todayKey(),
+    is_custom: true,
+  };
+
+  const insertRow = async (row: Record<string, unknown>) =>
+    supabase.from('daily_tasks').insert(row).select('*').single();
+
+  let { data, error } = await insertRow(payload);
+  if (error && shouldRetryWithoutRelatedTo(error)) {
+    ({ data, error } = await insertRow(stripRelatedTo(payload)));
+  }
 
   if (error) throw error;
   return data as DailyTask;
@@ -190,13 +213,15 @@ export async function updateTask(id: string, task: Partial<NewTaskInput>) {
   if (task.priority !== undefined) updates.priority = task.priority;
   if (task.due_date !== undefined) updates.due_date = task.due_date || null;
   if (task.task_type !== undefined) updates.task_type = task.task_type;
+  if (task.related_to !== undefined) updates.related_to = task.related_to?.trim() || null;
 
-  const { data, error } = await supabase
-    .from('daily_tasks')
-    .update(updates)
-    .eq('id', id)
-    .select('*')
-    .single();
+  const updateRow = async (row: Record<string, unknown>) =>
+    supabase.from('daily_tasks').update(row).eq('id', id).select('*').single();
+
+  let { data, error } = await updateRow(updates);
+  if (error && shouldRetryWithoutRelatedTo(error)) {
+    ({ data, error } = await updateRow(stripRelatedTo(updates)));
+  }
 
   if (error) throw error;
   return data as DailyTask;

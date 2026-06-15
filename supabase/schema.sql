@@ -78,6 +78,7 @@ CREATE TABLE daily_tasks (
   status task_status DEFAULT 'pending'::task_status NOT NULL,
   due_date DATE,
   task_type VARCHAR(20) DEFAULT 'today' CHECK (task_type IN ('today', 'fixed', 'regular')),
+  related_to TEXT,
   is_custom BOOLEAN DEFAULT false NOT NULL,
   date DATE DEFAULT CURRENT_DATE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -90,6 +91,7 @@ CREATE INDEX idx_daily_tasks_due_date ON daily_tasks(due_date);
 CREATE INDEX idx_daily_tasks_status ON daily_tasks(status);
 CREATE INDEX idx_daily_tasks_priority ON daily_tasks(priority);
 CREATE INDEX idx_daily_tasks_task_type ON daily_tasks(task_type);
+CREATE INDEX idx_daily_tasks_related_to ON daily_tasks(related_to);
 
 ALTER TABLE daily_tasks ENABLE ROW LEVEL SECURITY;
 -- Users can manage their own daily tasks

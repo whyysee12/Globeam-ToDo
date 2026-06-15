@@ -3,8 +3,9 @@ import { CheckCircle2, CircleDashed, Clock3, Download, Loader2, Plus, TimerReset
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
 import { useAuth } from '../context/auth';
-import { fetchTodayTasks, exportTasksToCSV, type DailyTask } from '../lib/tasks';
+import { exportTasksToCSV, fetchTasksByDateRange, updateTask, updateTaskStatus, type DailyTask, type TaskPriority, type TaskType } from '../lib/tasks';
 import { format, subDays } from 'date-fns';
 
 const statusLabels = {
@@ -19,22 +20,58 @@ const priorityStyles = {
   low: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
 };
 
-function TaskRow({ task }: { task: DailyTask }) {
+const priorityOptions: { label: string; value: TaskPriority }[] = [
+  { label: 'High', value: 'high' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'Low', value: 'low' },
+];
+
+const taskTypeOptions: { label: string; value: TaskType }[] = [
+  { label: "Today's Task", value: 'today' },
+  { label: 'Regular Task', value: 'regular' },
+  { label: 'Fixed Task', value: 'fixed' },
+];
+
+function TaskRow({ task, onStatusChange, onEdit, busy }: { task: DailyTask; onStatusChange: (task: DailyTask) => void; onEdit?: (task: DailyTask) => void; busy: boolean; }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-gray-100 py-4 last:border-0 dark:border-gray-800">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="truncate text-sm font-semibold text-gray-950 dark:text-white">{task.title}</h3>
-          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityStyles[task.priority]}`}>
-            {task.priority}
-          </span>
+    <div className="flex flex-col gap-3 border-b border-gray-100 py-4 last:border-0 dark:border-gray-800">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-sm font-semibold text-gray-950 dark:text-white">{task.title}</h3>
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityStyles[task.priority]}`}>
+              {task.priority}
+            </span>
+          </div>
+          {task.description && <p className="mt-1 line-clamp-2 text-sm text-gray-500 dark:text-gray-400">{task.description}</p>}
+          {task.remark && <p className="mt-1 text-xs italic text-gray-600 dark:text-gray-300">💡 {task.remark}</p>}
         </div>
-        {task.description && <p className="mt-1 line-clamp-2 text-sm text-gray-500 dark:text-gray-400">{task.description}</p>}
-        {task.remark && <p className="mt-1 text-xs italic text-gray-600 dark:text-gray-300">💡 {task.remark}</p>}
+        <div className="shrink-0 text-right text-xs text-gray-500 dark:text-gray-400">
+          <div>{statusLabels[task.status]}</div>
+          {task.due_date && <div className="mt-1">{task.due_date}</div>}
+        </div>
       </div>
-      <div className="shrink-0 text-right text-xs text-gray-500 dark:text-gray-400">
-        <div>{statusLabels[task.status]}</div>
-        {task.due_date && <div className="mt-1">{task.due_date}</div>}
+      <div className="flex flex-wrap justify-end gap-2">
+        {task.status !== 'completed' && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => onStatusChange(task)}
+          >
+            Mark completed
+          </Button>
+        )}
+        {onEdit && (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => onEdit(task)}
+          >
+            Edit
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -52,7 +89,14 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState<SortOption>('latest');
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
   const [exportLoading, setExportLoading] = useState(false);
-
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<DailyTask | null>(null);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [remark, setRemark] = useState('');
+  const [priority, setPriority] = useState<TaskPriority>('medium');
+  const [dueDate, setDueDate] = useState('');
+  const [taskType, setTaskType] = useState<TaskType>('today');
   const dateStr = format(currentDate, 'yyyy-MM-dd');
   const isToday = format(new Date(), 'yyyy-MM-dd') === dateStr;
 
@@ -61,12 +105,13 @@ export default function Dashboard() {
 
     setLoading(true);
     setError(null);
-    
-    fetchTodayTasks(user.id)
-      .then(allTasks => {
-        // Filter tasks by the selected date
-        const filteredByDate = allTasks.filter(task => task.date === dateStr);
-        setTasks(filteredByDate);
+
+    fetchTasksByDateRange(user.id, '1970-01-01', dateStr)
+      .then((allTasks) => {
+        const carryOverTasks = allTasks.filter(
+          (task) => task.date === dateStr || task.status === 'pending',
+        );
+        setTasks(carryOverTasks);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -108,6 +153,68 @@ export default function Dashboard() {
 
     return { completed, inProgress, pending, progress };
   }, [tasks]);
+
+  const resetEditForm = () => {
+    setTitle('');
+    setDescription('');
+    setRemark('');
+    setPriority('medium');
+    setDueDate('');
+    setTaskType('today');
+  };
+
+  const handleEditClick = (task: DailyTask) => {
+    setEditingTask(task);
+    setTitle(task.title);
+    setDescription(task.description || '');
+    setRemark(task.remark || '');
+    setPriority(task.priority);
+    setDueDate(task.due_date || '');
+    setTaskType(task.task_type);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTask(null);
+    resetEditForm();
+  };
+
+  const handleUpdateTask = async () => {
+    if (!editingTask) return;
+    setBusyId(editingTask.id);
+    setError(null);
+
+    try {
+      const updated = await updateTask(editingTask.id, {
+        title,
+        description,
+        remark,
+        priority,
+        due_date: dueDate,
+        task_type: taskType,
+      });
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setEditingTask(null);
+      resetEditForm();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleStatusChange = async (task: DailyTask) => {
+    setBusyId(task.id);
+    setError(null);
+
+    try {
+      const updated = await updateTaskStatus(task.id, 'completed');
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const handlePreviousDay = () => {
     setCurrentDate(subDays(currentDate, 1));
@@ -202,7 +309,7 @@ export default function Dashboard() {
       {/* Filter and Sort */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Sort By</label>
               <select
@@ -245,6 +352,55 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {editingTask && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Edit previous task</CardTitle>
+            <CardDescription>Update the task details for the selected date.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
+              <Input label="Description" value={description} onChange={(event) => setDescription(event.target.value)} />
+              <Input label="Remark" value={remark} onChange={(event) => setRemark(event.target.value)} />
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Task Type</label>
+                <select
+                  value={taskType}
+                  onChange={(event) => setTaskType(event.target.value as TaskType)}
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                >
+                  {taskTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Priority</label>
+                <select
+                  value={priority}
+                  onChange={(event) => setPriority(event.target.value as TaskPriority)}
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                >
+                  {priorityOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <Input label="Due Date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="button" onClick={handleUpdateTask} disabled={busyId === editingTask.id}>
+                Save changes
+              </Button>
+              <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
@@ -303,7 +459,9 @@ export default function Dashboard() {
             {loading ? (
               <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-brand-500" /></div>
             ) : filteredAndSortedTasks.length ? (
-              filteredAndSortedTasks.slice(0, 5).map((task) => <TaskRow key={task.id} task={task} />)
+              filteredAndSortedTasks.slice(0, 5).map((task) => (
+                <TaskRow key={task.id} task={task} onStatusChange={handleStatusChange} onEdit={handleEditClick} busy={busyId === task.id} />
+              ))
             ) : (
               <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
                 No tasks found.

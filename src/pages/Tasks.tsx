@@ -71,6 +71,7 @@ function TaskCard({
           </div>
           {task.description && <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{task.description}</p>}
           {task.remark && <p className="mt-1 text-sm italic text-gray-600 dark:text-gray-300">💡 {task.remark}</p>}
+          {task.related_to && <p className="mt-1 text-sm text-blue-600 dark:text-blue-300">👤 Related to {task.related_to}</p>}
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
             <span className="inline-block rounded bg-gray-100 px-2 py-1 dark:bg-gray-800">{task.task_type}</span>
             {task.due_date && <span>Due {task.due_date}</span>}
@@ -117,6 +118,7 @@ export default function Tasks() {
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [dueDate, setDueDate] = useState('');
   const [taskType, setTaskType] = useState<TaskType>('today');
+  const [relatedTo, setRelatedTo] = useState('');
   const [editingTask, setEditingTask] = useState<DailyTask | null>(null);
 
   const groupedTasks = useMemo(() => {
@@ -173,6 +175,7 @@ export default function Tasks() {
         priority,
         due_date: dueDate,
         task_type: taskType,
+        related_to: relatedTo,
       });
       setTasks((current) => [...current, created]);
       resetForm();
@@ -197,6 +200,7 @@ export default function Tasks() {
         priority,
         due_date: dueDate,
         task_type: taskType,
+        related_to: relatedTo,
       });
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       resetForm();
@@ -215,6 +219,7 @@ export default function Tasks() {
     setPriority('medium');
     setDueDate('');
     setTaskType('today');
+    setRelatedTo('');
   };
 
   const handleEditClick = (task: DailyTask) => {
@@ -225,6 +230,7 @@ export default function Tasks() {
     setPriority(task.priority);
     setDueDate(task.due_date || '');
     setTaskType(task.task_type);
+    setRelatedTo(task.related_to || '');
   };
 
   const handleCancelEdit = () => {
@@ -284,6 +290,7 @@ export default function Tasks() {
               <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Follow up with client" required />
               <Input label="Description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Optional details" />
               <Input label="Remark (Type of work)" value={remark} onChange={(event) => setRemark(event.target.value)} placeholder="e.g., Documentation, Meeting, Development" />
+              <Input label="Related to" value={relatedTo} onChange={(event) => setRelatedTo(event.target.value)} placeholder="e.g., Sachin Sir, Dharmendar Sir, Mamta Mam" />
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Task Type</label>
                 <select
