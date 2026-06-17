@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, CircleDashed, Clock3, Download, Loader2, Plus, TimerReset, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Circle, CircleDashed, Download, Loader2, Plus, RefreshCcw, TimerReset, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { useAuth } from '../context/auth';
-import { exportTasksToCSV, fetchTasksByDateRange, updateTask, updateTaskStatus, type DailyTask, type TaskPriority, type TaskType } from '../lib/tasks';
+import { exportTasksToCSV, fetchTasksByDateRange, updateTask, updateTaskStatus, type DailyTask, type TaskPriority, type TaskType, type TaskStatus } from '../lib/tasks';
 import { format, subDays } from 'date-fns';
 
 const statusLabels = {
@@ -32,7 +32,7 @@ const taskTypeOptions: { label: string; value: TaskType }[] = [
   { label: 'Fixed Task', value: 'fixed' },
 ];
 
-function TaskRow({ task, onStatusChange, onEdit, busy }: { task: DailyTask; onStatusChange: (task: DailyTask) => void; onEdit?: (task: DailyTask) => void; busy: boolean; }) {
+function TaskRow({ task, onStatusChange, onEdit, busy }: { task: DailyTask; onStatusChange: (task: DailyTask, status: TaskStatus) => void; onEdit?: (task: DailyTask) => void; busy: boolean; }) {
   return (
     <div className="flex flex-col gap-3 border-b border-gray-100 py-4 last:border-0 dark:border-gray-800">
       <div className="flex items-start justify-between gap-4">
@@ -52,14 +52,34 @@ function TaskRow({ task, onStatusChange, onEdit, busy }: { task: DailyTask; onSt
         </div>
       </div>
       <div className="flex flex-wrap justify-end gap-2">
+        {task.status !== 'pending' && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => onStatusChange(task, 'pending')}
+          >
+            Pending
+          </Button>
+        )}
+        {task.status !== 'in_progress' && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => onStatusChange(task, 'in_progress')}
+          >
+            Start
+          </Button>
+        )}
         {task.status !== 'completed' && (
           <Button
             size="sm"
             variant="outline"
             disabled={busy}
-            onClick={() => onStatusChange(task)}
+            onClick={() => onStatusChange(task, 'completed')}
           >
-            Mark completed
+            Complete
           </Button>
         )}
         {onEdit && (
@@ -145,6 +165,19 @@ export default function Dashboard() {
     return filtered;
   }, [tasks, sortBy, filterBy]);
 
+  const statusGroups = useMemo(() => {
+    const groups: { label: string; value: TaskStatus; icon: typeof Circle; iconColor: string; tasks: DailyTask[] }[] = [
+      { label: 'Pending', value: 'pending', icon: CircleDashed, iconColor: 'text-amber-500', tasks: [] },
+      { label: 'In Progress', value: 'in_progress', icon: RefreshCcw, iconColor: 'text-brand-500', tasks: [] },
+      { label: 'Completed', value: 'completed', icon: CheckCircle2, iconColor: 'text-emerald-500', tasks: [] },
+    ];
+    for (const task of filteredAndSortedTasks) {
+      const group = groups.find(g => g.value === task.status);
+      if (group) group.tasks.push(task);
+    }
+    return groups;
+  }, [filteredAndSortedTasks]);
+
   const stats = useMemo(() => {
     const completed = tasks.filter((task) => task.status === 'completed').length;
     const inProgress = tasks.filter((task) => task.status === 'in_progress').length;
@@ -202,12 +235,12 @@ export default function Dashboard() {
     }
   };
 
-  const handleStatusChange = async (task: DailyTask) => {
+  const handleStatusChange = async (task: DailyTask, status: TaskStatus) => {
     setBusyId(task.id);
     setError(null);
 
     try {
-      const updated = await updateTaskStatus(task.id, 'completed');
+      const updated = await updateTaskStatus(task.id, status);
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (err) {
       setError((err as Error).message);
@@ -429,49 +462,55 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Task progress</CardTitle>
-            <CardDescription>{stats.progress}% of {isToday ? "today's" : "this day's"} work is complete</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-3 rounded-full bg-gray-100 dark:bg-gray-800">
-              <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${stats.progress}%` }} />
-            </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              {(['pending', 'in_progress', 'completed'] as const).map((status) => (
-                <div key={status} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{statusLabels[status]}</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-950 dark:text-white">{tasks.filter((task) => task.status === status).length}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Task Progress */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Task progress</CardTitle>
+          <CardDescription>{stats.progress}% of {isToday ? "today's" : "this day's"} work is complete</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="h-3 rounded-full bg-gray-100 dark:bg-gray-800">
+            <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${stats.progress}%` }} />
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Clock3 className="h-5 w-5 text-brand-500" /> Tasks</CardTitle>
-            <CardDescription>Sorted &amp; filtered list</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-brand-500" /></div>
-            ) : filteredAndSortedTasks.length ? (
-              <div className="space-y-4 max-h-[70vh] overflow-auto pr-2">
-                {filteredAndSortedTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} onStatusChange={handleStatusChange} onEdit={handleEditClick} busy={busyId === task.id} />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                No tasks found.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Grouped Task Columns: Pending / In Progress / Completed */}
+      {loading ? (
+        <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-500" /></div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {statusGroups.map((group) => {
+            const Icon = group.icon;
+            return (
+              <section key={group.value} className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    <Icon className={`h-4 w-4 ${group.iconColor}`} />
+                    {group.label}
+                  </h2>
+                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">{group.tasks.length}</span>
+                </div>
+                {group.tasks.length ? (
+                  <div className="space-y-3 max-h-[60vh] overflow-auto pr-1">
+                    {group.tasks.map((task) => (
+                      <Card key={task.id}>
+                        <CardContent className="pt-4">
+                          <TaskRow task={task} onStatusChange={handleStatusChange} onEdit={handleEditClick} busy={busyId === task.id} />
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                    Nothing here yet.
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
