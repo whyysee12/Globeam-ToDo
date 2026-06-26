@@ -45,6 +45,7 @@ function TaskRow({ task, onStatusChange, onEdit, busy }: { task: DailyTask; onSt
           </div>
           {task.description && <p className="mt-1 line-clamp-2 text-sm text-gray-500 dark:text-gray-400">{task.description}</p>}
           {task.remark && <p className="mt-1 text-xs italic text-gray-600 dark:text-gray-300">💡 {task.remark}</p>}
+          {task.related_to && <p className="mt-1 text-xs text-blue-600 dark:text-blue-300">👤 Related to {task.related_to}</p>}
         </div>
         <div className="shrink-0 text-right text-xs text-gray-500 dark:text-gray-400">
           <div>{statusLabels[task.status]}</div>
