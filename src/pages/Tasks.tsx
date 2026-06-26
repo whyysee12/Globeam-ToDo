@@ -177,7 +177,7 @@ export default function Tasks() {
         task_type: taskType,
         related_to: relatedTo,
       });
-      setTasks((current) => [...current, created]);
+      setTasks((current) => [created, ...current]);
       resetForm();
     } catch (err) {
       setError((err as Error).message);
