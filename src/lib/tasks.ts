@@ -62,8 +62,7 @@ export async function fetchTasks(userId: string, date = todayKey()) {
     .select('*')
     .eq('user_id', userId)
     .eq('date', date)
-    .order('due_date', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false });
 
   if (error) throw error;
   return (data ?? []) as DailyTask[];
@@ -77,8 +76,7 @@ export async function fetchTasksByDateRange(userId: string, startDate: string, e
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date', { ascending: false })
-    .order('due_date', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false });
 
   if (error) throw error;
   return (data ?? []) as DailyTask[];
